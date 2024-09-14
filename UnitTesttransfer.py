@@ -1,133 +1,109 @@
 
 import unittest
-from unittest.mock import patch, mock_open, MonkeyPatch
-from your_module import transfer_funds
+from unittest.mock import patch, mock_open, Mock
+from your_module import transfer_amount  # replace 'your_module' with the actual name of your module
 
-
-class TestTransferFunds(unittest.TestCase):
+class TestTransferAmount(unittest.TestCase):
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_valid(self, mock_print, mock_conn, mock_text, mock_engine):
+    def test_transfer_amount_success(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute.return_value = None
+        conn.commit.return_value = None
+        conn.close.return_value = None
+
         p_sender = 1
         p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_text.return_value = None
-        transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 1)
+        p_amount = 10
+
+        transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_has_calls([
+            mock.call(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender),
+            mock.call(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"), p_amount=p_amount, p_receiver=p_receiver),
+        ], any_order=True)
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_sender_non_existent(self, mock_print, mock_conn, mock_text, mock_engine):
-        p_sender = 100
+    def test_transfer_amount_sender_not_found(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute().execution_options.return_value = None
+        conn.execute.side_effect = [Exception('Sender account not found')]
+
+        p_sender = 1
         p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
+        p_amount = 10
+
         with self.assertRaises(Exception):
-            transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 0)
+            transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_called_once_with(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender)
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_receiver_non_existent(self, mock_print, mock_conn, mock_text, mock_engine):
+    def test_transfer_amount_receiver_not_found(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute().execution_options.return_value = None
+        conn.execute.side_effect = [Exception('Receiver account not found')]
+
         p_sender = 1
-        p_receiver = 100
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
+        p_receiver = 2
+        p_amount = 10
+
         with self.assertRaises(Exception):
-            transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 0)
+            transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_called_once_with(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"), p_amount=p_amount, p_receiver=p_receiver)
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_invalid_amount(self, mock_print, mock_conn, mock_text, mock_engine):
+    def test_transfer_amount_database_error(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute().execution_options.return_value = None
+        conn.execute.side_effect = [Exception('Database error')]
+
         p_sender = 1
         p_receiver = 2
-        p_amount = 'ten'
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
+        p_amount = 10
+
         with self.assertRaises(Exception):
-            transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 0)
-        self.assertEqual(mock_conn.commit.call_count, 0)
+            transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_called_once_with(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender)
+        conn.rollback.assert_called_once_with()
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_no_ddl_commands(self, mock_print, mock_conn, mock_text, mock_engine):
+    def test_transfer_amount_positive_amount(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute.return_value = None
+        conn.commit.return_value = None
+        conn.close.return_value = None
+
         p_sender = 1
         p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        with patch('your_module.engine.connect') as mock_connect:
-            with mock_connect.return_value as mock_connection:
-                with mock_connection.cursor.return_value as mock_cursor:
-                    mock_cursor.execute.return_value = None
-                result = transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 1)
-        self.assertIsNone(result)
+        p_amount = 10
+
+        transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_has_calls([
+            mock.call(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender),
+            mock.call(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"), p_amount=p_amount, p_receiver=p_receiver),
+        ], any_order=True)
 
     @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_fundsDDL_commands(self, mock_print, mock_conn, mock_text, mock_engine):
-        p_sender = 1
-        p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        result = transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertIsNone(result)
+    def test_transfer_amount_negative_amount(self, mock_engine):
+        conn = mock_engine.connect.return_value
+        conn.execute.return_value = None
+        conn.commit.return_value = None
+        conn.close.return_value = None
 
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_execution_error(self, mock_print, mock_conn, mock_text, mock_engine):
         p_sender = 1
         p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.side_effect = Exception('Error')
-        with self.assertRaises(Exception):
-            transfer_funds(p_sender, p_receiver, p_amount)
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 0)
+        p_amount = -10
 
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    @patch('your_module.print')
-    def test_transfer_funds_commit_error(self, mock_print, mock_conn, mock_text, mock_engine):
-        p_sender = 1
-        p_receiver = 2
-        p_amount = 10.0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.side_effect = Exception('Error')
-        try:
-            transfer_funds(p_sender, p_receiver, p_amount)
-        except Exception as e:
-            self.assertEqual(str(e), 'Error')
-        self.assertEqual(mock_conn.execute.call_count, 2)
-        self.assertEqual(mock_conn.commit.call_count, 1)
+        transfer_amount(p_sender, p_receiver, p_amount)
+
+        conn.execute.assert_has_calls([
+            mock.call(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender),
+            mock.call(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"), p_amount=p_amount, p_receiver=p_receiver),
+        ], any_order=True)
 
 if __name__ == '__main__':
     unittest.main()
