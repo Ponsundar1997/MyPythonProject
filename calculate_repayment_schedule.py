@@ -1,63 +1,61 @@
-Python
-from config import engine
-from sqlalchemy import text, Interval
+
+from sqlalchemy import create_engine, text
 import pandas as pd
 
+engine = create_engine('postgresql://user:password@host:port/dbname')
+
 def calculate_repayment_schedule(loan_id):
-    # Translate PostgreSQL query to SQLAlchemy SQL expression
-    query = text("""
-        SELECT loanamount, interestrate, loanterm, startdate
-        FROM loans
-        WHERE loanid = :loan_id;
-    """)
+    with engine.connect() as conn:
+        # Get loan details
+        result = conn.execute(text("SELECT loanamount, interestrate, loanterm, startdate FROM loans WHERE loanid = :loan_id"), {'loan_id': loan_id})
+        loan_amount, interest_rate, loan_term, start_date = result.fetchone()
 
-    # Execute the query and fetch the result
-    result = engine.execute(query, loan_id=loan_id).fetchone()
+        # Convert annual interest rate to monthly interest rate (divide by 12)
+        monthly_interest_rate = interest_rate / 100 / 12
 
-    if result is None:
-        return None
+        # Calculate fixed monthly payment using the amortization formula
+        monthly_payment = (loan_amount * monthly_interest_rate) / (1 - pow(1 + monthly_interest_rate, -loan_term))
 
-    loan_amount, interest_rate, loan_term, start_date = result
+        # Initialize balance to the loan amount
+        balance = loan_amount
 
-    # Convert annual interest rate to monthly interest rate
-    monthly_interest_rate = (interest_rate / 100 / 12)
+        # Initialize payment_date to the start date of the loan
+        payment_date = start_date
 
-    # Calculate fixed monthly payment
-    monthly_payment = (loan_amount * monthly_interest_rate) / \
-                       (1 - pow(1 + monthly_interest_rate, -loan_term))
+        # Initialize payment_number to 1
+        payment_number = 1
 
-    # Initialize variables
-    balance = loan_amount
-    payment_date = start_date
-    payment_number = 1
+        # Loop through each month and calculate the repayment schedule
+        while payment_number <= loan_term:
+            # Calculate interest for the current month
+            interest_amount = balance * monthly_interest_rate
 
-    # Repayment schedule
-    repayment_schedule = []
+            # Calculate principal for the current month
+            principal_amount = monthly_payment - interest_amount
 
-    while payment_number <= loan_term:
-        # Calculate interest and principal for the current month
-        interest_amount = balance * monthly_interest_rate
-        principal_amount = monthly_payment - interest_amount
+            # Deduct principal from balance
+            balance = balance - principal_amount
 
-        # Deduct principal from balance
-        balance -= principal_amount
+            # Execute insert query
+            conn.execute(text("""
+                INSERT INTO repaymentschedule (loanid, paymentnumber, paymentdate, principalamount, interestamount, totalpayment, balance)
+                VALUES (:loan_id, :payment_number, :payment_date, :principal_amount, :interest_amount, :monthly_payment, :balance)
+            """), {
+                'loan_id': loan_id,
+                'payment_number': payment_number,
+                'payment_date': payment_date,
+                'principal_amount': principal_amount,
+                'interest_amount': interest_amount,
+                'monthly_payment': monthly_payment,
+                'balance': balance
+            })
 
-        # Insert repayment details into the repayment schedule
-        repayment_schedule.append({
-            'loanid': loan_id,
-            'paymentnumber': payment_number,
-            'paymentdate': payment_date,
-            'principalamount': principal_amount,
-            'interestamount': interest_amount,
-            'totalpayment': monthly_payment,
-            'balance': balance
-        })
+            # Move to the next month
+            payment_date = payment_date + pd.Timedelta('1 month')
+            payment_number = payment_number + 1
 
-        # Move to the next month
-        payment_date += Interval(days=30)
-        payment_number += 1
+        # Commit changes
+        conn.commit()
 
-    # Create a DataFrame from the repayment schedule
-    df = pd.DataFrame(repayment_schedule)
-
-    return df
+        # Return the final result
+        return conn.execute(text("SELECT * FROM repaymentschedule WHERE loanid = :loan_id"), {'loan_id': loan_id}).fetchall()
