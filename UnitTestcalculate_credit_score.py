@@ -1,88 +1,61 @@
 
 import unittest
-from unittest.mock import patch, Mock
-from your_module import calculate_credit_score
+from unittest.mock import MagicMock
+from your_module import update_customer_credit_score
 
-class TestCalculateCreditScore(unittest.TestCase):
-    @patch('your_module.create_engine')
-    @patch('your_module.engine.connect')
-    @patch('your_module.text')
-    def test_calculate_credit_score(self, mock_text, mock_connect, mock_create_engine):
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = (100, 200, 300)
-        mock_connect.return_value = mock_cursor
-        mock_engine = Mock()
-        mock_engine.connect.return_value = mock_cursor
-        mock_create_engine.return_value = mock_engine
+class TestUpdateCustomerCreditScore(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine('sqlite:///:memory:')
+        cls.conn = cls.engine.connect()
 
-        calculate_credit_score(1)
+    def setUp(self):
+        selfMocks = {
+            'engine': cls.engine,
+            'conn': self.conn
+        }
+        self.update_customer_credit_score = update_customer_credit_score
+        self.update_customer_credit_score.configure(**selfMocks)
 
-        self.assertEqual(mock_text.call_count, 5)
-        self.assertEqual(mock_connect.call_count, 1)
-        self.assertEqual(mock_cursor.execute.call_count, 4)
-        self.assertEqual(mock_cursor.fetchone.call_count, 3)
-        self.assertEqual(mock_engine.connect.call_count, 1)
-        self.assertEqual(mock_engine.disconnect.call_count, 1)
+    def test_update_customer_credit_score_positive_defaults(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[1, 100, 10000, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 550)
 
-    @patch('your_module.create_engine')
-    @patch('your_module.engine.connect')
-    @patch('your_module.text')
-    def test_calculate_credit_score_no_loans(self, mock_text, mock_connect, mock_create_engine):
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = (0, 0, 0)
-        mock_connect.return_value = mock_cursor
-        mock_engine = Mock()
-        mock_engine.connect.return_value = mock_cursor
-        mock_create_engine.return_value = mock_engine
+    def test_update_customer_credit_score_negative_defaults(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[-1, -100, -10000, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 500)
 
-        calculate_credit_score(1)
+    def test_update_customer_credit_score_nonzero_loan_amount(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[100, 50, 0, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 500)
 
-        self.assertEqual(mock_text.call_count, 3)
-        self.assertEqual(mock_connect.call_count, 1)
-        self.assertEqual(mock_cursor.execute.call_count, 2)
-        self.assertEqual(mock_cursor.fetchone.call_count, 1)
-        self.assertEqual(mock_engine.connect.call_count, 1)
-        self.assertEqual(mock_engine.disconnect.call_count, 1)
+    def test_update_customer_credit_score_zero_loan_amount(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[0, 0, 0, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 700)
 
-    @patch('your_module.create_engine')
-    @patch('your_module.engine.connect')
-    @patch('your_module.text')
-    def test_calculate_credit_score_low_score(self, mock_text, mock_connect, mock_create_engine):
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = (0, 0, 0)
-        mock_connect.return_value = mock_cursor
-        mock_engine = Mock()
-        mock_engine.connect.return_value = mock_cursor
-        mock_create_engine.return_value = mock_engine
+    def test_update_customer_credit_score_credit_card_balance_zero(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[0, 0, 0, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 600)
 
-        calculate_credit_score(1)
+    def test_update_customer_credit_score_large_credit_card_balance(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[0, 0, 10000, 0])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 350)
 
-        self.assertEqual(mock_text.call_count, 3)
-        self.assertEqual(mock_connect.call_count, 1)
-        self.assertEqual(mock_cursor.execute.call_count, 2)
-        self.assertEqual(mock_cursor.fetchone.call_count, 1)
-        self.assertEqual(mock_engine.connect.call_count, 1)
-        self.assertEqual(mock_engine.disconnect.call_count, 1)
+    def test_update_customer_credit_score_late_payments(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[0, 0, 0, 3])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 450)
 
-    @patch('your_module.create_engine')
-    @patch('your_module.engine.connect')
-    @patch('your_module.text')
-    def test_calculate_credit_score_high_score(self, mock_text, mock_connect, mock_create_engine):
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = (100, 200, 300)
-        mock_connect.return_value = mock_cursor
-        mock_engine = Mock()
-        mock_engine.connect.return_value = mock_cursor
-        mock_create_engine.return_value = mock_engine
-
-        calculate_credit_score(1)
-
-        self.assertEqual(mock_text.call_count, 5)
-        self.assertEqual(mock_connect.call_count, 1)
-        self.assertEqual(mock_cursor.execute.call_count, 4)
-        self.assertEqual(mock_cursor.fetchone.call_count, 3)
-        self.assertEqual(mock_engine.connect.call_count, 1)
-        self.assertEqual(mock_engine.disconnect.call_count, 1)
+    def test_update_customer_credit_score_low_score_alert(self):
+        selfMocks['conn'].execute = MagicMock(return_value=[0, 0, 0, 10])
+        result = self.update_customer_credit_score(1)
+        self.assertEqual(result, 300)
 
 if __name__ == '__main__':
     unittest.main()

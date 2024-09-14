@@ -1,20 +1,23 @@
-
-from SQLAlchemy import text
+Python
+from sqlalchemy import text, create_engine
 from config import engine
-import pandas as pd
 
-def transfer_amount(p_sender, p_receiver, p_amount):
-    conn = engine.connect()
+def transfer_funds(sender_id, receiver_id, p_amount):
     try:
+        # Execute DDL command if needed
+        engine.execute(text("CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY, balance INTEGER)"))
+
         # Subtract the amount from the sender's account
-        conn.execute(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"), p_amount=p_amount, p_sender=p_sender)
+        engine.execute(text("UPDATE accounts SET balance = balance - :p_amount WHERE id = :p_sender"),
+                       p_sender=sender_id, p_amount=p_amount)
         
         # Add the amount to the receiver's account
-        conn.execute(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"), p_amount=p_amount, p_receiver=p_receiver)
+        engine.execute(text("UPDATE accounts SET balance = balance + :p_amount WHERE id = :p_receiver"),
+                       p_receiver=receiver_id, p_amount=p_amount)
         
-        conn.commit()
+        # Commit the operation
+        engine.connect().commit()
     except Exception as e:
-        conn.rollback()
-        print(e)
-    finally:
-        conn.close()
+        # Handle any exceptions
+        print(f"Error: {e}")
+        engine.connect().rollback()
