@@ -1,30 +1,24 @@
-Python
+
 from sqlalchemy import create_engine, text
 from config import engine
+import pandas as pd
 
-def transfer(amount, sender, receiver):
-    try:
-        # Create a connection to the database
-        conn = engine.connect()
-
-        # DDL commands (optional)
-        # Example: Create a table if it doesn't exist
-        # conn.execute(text("CREATE TABLE IF NOT EXISTS accounts (id INTEGER, balance INTEGER)"))
-
-        # Subtract the amount from the sender's account
-        result = conn.execute(text("UPDATE accounts SET balance = balance - :amount WHERE id = :sender"), {'amount': amount, 'sender': sender})
-        sender_balance = conn.execute(text("SELECT balance FROM accounts WHERE id = :sender"), {'sender': sender}).scalar()
-
-        # Add the amount to the receiver's account
-        result = conn.execute(text("UPDATE accounts SET balance = balance + :amount WHERE id = :receiver"), {'amount': amount, 'receiver': receiver})
-        receiver_balance = conn.execute(text("SELECT balance FROM accounts WHERE id = :receiver"), {'receiver': receiver}).scalar()
-
-        print(f"Sender's new balance: {sender_balance}")
-        print(f"Receiver's new balance: {receiver_balance}")
-
-    except Exception as e:
-        print(f"Error transferring amount: {str(e)}")
-
-    finally:
-        # Commit the transaction
-        conn.close()
+def your_function(param1, param2):
+    conn = engine.connect()
+    result = conn.execute(text("""
+        BEGIN;
+        -- some DDL commands here
+        CREATE TEMP TABLE temp_table AS
+        SELECT * FROM your_table WHERE your_column = :param1;
+        CREATE INDEX idx_temp_table ON temp_table(your_index_column);
+        COMMIT;
+    """), {'param1': param1})
+    
+    result = conn.execute(text("""
+        SELECT * FROM temp_table
+        WHERE another_column = :param2
+        ORDER BY some_column;
+    """), {'param2': param2})
+    
+    df = pd.DataFrame(result.fetchall(), columns=[x.key for x in result.keys()])
+    return df
