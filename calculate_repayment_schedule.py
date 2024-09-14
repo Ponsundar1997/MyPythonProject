@@ -1,41 +1,42 @@
-
-from config import engine
-import pandas as pd
+Python
 from sqlalchemy import text
+import pandas as pd
+from config import engine
 
 def calculate_repayment_schedule(loan_id):
     conn = engine.connect()
     
-    # Execute the DDL commands if needed
+    # Execute DDL command to create RepaymentSchedule table if it does not exist
     conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS repayment_schedule (
-            loan_id INT,
-            payment_number INT,
-            payment_date DATE,
-            principal_amount DECIMAL(15, 2),
-            interest_amount DECIMAL(15, 2),
-            total_payment DECIMAL(15, 2),
-            balance DECIMAL(15, 2)
+        IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'repaymentschedule') 
+        CREATE TABLE repaymentschedule (
+            loanid INTEGER,
+            paymentnumber INTEGER,
+            paymentdate DATE,
+            principalamount DECIMAL(15,2),
+            interestamount DECIMAL(15,2),
+            totalpayment DECIMAL(15,2),
+            balance DECIMAL(15,2)
         );
     """))
+    conn.close()
     
     # Get loan details
-    loan_data = pd.read_sql_query(f"""
+    conn = engine.connect()
+    result = conn.execute(text("""
         SELECT loanamount, interestrate, loanterm, startdate
         FROM loans
-        WHERE loanid = {loan_id};
-    """, conn)
+        WHERE loanid = :loan_id;
+    """), loan_id=loan_id)
+    conn.close()
     
-    loan_amount = loan_data['loanamount'].values[0]
-    interest_rate = loan_data['interestrate'].values[0]
-    loan_term = loan_data['loanterm'].values[0]
-    start_date = loan_data['startdate'].values[0]
+    loan_amount, interest_rate, loan_term, start_date = result.fetchone()
     
     # Convert annual interest rate to monthly interest rate (divide by 12)
     monthly_interest_rate = interest_rate / 100 / 12
     
     # Calculate fixed monthly payment using the amortization formula
-    monthly_payment = (loan_amount * monthly_interest_rate) / (1 - pow((1 + monthly_interest_rate), -loan_term))
+    monthly_payment = (loan_amount * monthly_interest_rate) / (1 - pd.core.math.pow(1 + monthly_interest_rate, -loan_term))
     
     # Initialize balance to the loan amount
     balance = loan_amount
@@ -44,7 +45,8 @@ def calculate_repayment_schedule(loan_id):
     payment_date = start_date
     
     # Loop through each month and calculate the repayment schedule
-    for payment_number in range(1, loan_term + 1):
+    payment_number = 1
+    while payment_number <= loan_term:
         # Calculate interest for the current month
         interest_amount = balance * monthly_interest_rate
         
@@ -52,24 +54,24 @@ def calculate_repayment_schedule(loan_id):
         principal_amount = monthly_payment - interest_amount
         
         # Deduct principal from balance
-        balance -= principal_amount
+        balance = balance - principal_amount
         
         # Insert repayment details into the RepaymentSchedule table
+        conn = engine.connect()
         conn.execute(text("""
-            INSERT INTO repayment_schedule (loan_id, payment_number, payment_date, principal_amount, interest_amount, total_payment, balance)
-            VALUES (:loan_id, :payment_number, :payment_date, :principal_amount, :interest_amount, :monthly_payment, :balance);
-        """), {
-            'loan_id': loan_id,
-            'payment_number': payment_number,
-            'payment_date': payment_date,
-            'principal_amount': principal_amount,
-            'interest_amount': interest_amount,
-            'monthly_payment': monthly_payment,
-            'balance': balance
-        })
+            INSERT INTO repaymentschedule (loanid, paymentnumber, paymentdate, principalamount, interestamount, totalpayment, balance)
+            VALUES (:loan_id, :payment_number, :payment_date, :principal_amount, :interest_amount, :monthly_payment, :balance;
+        """), 
+                     loan_id=loan_id, 
+                     payment_number=payment_number, 
+                     payment_date=payment_date, 
+                     principal_amount=principal_amount, 
+                     interest_amount=interest_amount, 
+                     monthly_payment=monthly_payment, 
+                     balance=balance
+        )
+        conn.close()
         
         # Move to the next month
-        payment_date += pd.Timedelta(days=30)  # Assuming a month has 30 days
-        payment_number += 1
-    
-    conn.close()
+        payment_date = payment_date + pd.DateOffset(months=1)
+        payment_number = payment_number + 1

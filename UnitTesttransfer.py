@@ -1,129 +1,67 @@
 
 import unittest
 from unittest.mock import patch, Mock
-from your_module import transfer_funds
+from your_module import transfer  # Replace with your actual module name
 
-class TestTransferFunds(unittest.TestCase):
+class TestTransfer(unittest.TestCase):
+    @patch('your_module.engine.connect', autospec=True)
+    def test_transfer(self, mock_connect):
+        mock_cursor = Mock()
+        mock_cursor.execute.return_value = Mock()
+        mock_cursor.execute.return_value.scalar.return_value = 100  # Initial balance
 
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    def test_transfer_funds_positive_amount(self, mock_conn, mock_text, mock_engine):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
-        amount = 100
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_conn.close.return_value = None
-        mock_text.return_value = 'SELECT balance FROM accounts WHERE id = :sender'
-        mock_conn.execute SIDE_EFFECT use mock_conn.execute.return_value
+        mock_connect.return_value = mock_cursor
+        transfer(50, 1, 2)
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        self.assertEqual(mock_cursor.execute.call_args_list, [
+            ((text("UPDATE accounts SET balance = balance - :amount WHERE id = :sender"), {'amount': 50, 'sender': 1}), {}),
+            ((text("UPDATE accounts SET balance = balance + :amount WHERE id = :receiver"), {'amount': 50, 'receiver': 2}), {})
+        ])
+        self.assertEqual(mock_cursor.close.called, True)
 
-        # Act
-        transfer_funds(sender_id, receiver_id, amount)
+    @patch('your_module.engine.connect', autospec=True)
+    def test_transfer_no_sender_account(self, mock_connect):
+        mock_cursor = Mock()
+        mock_cursor.execute.side_effect = Exception('No sender account found')
+        mock_connect.return_value = mock_cursor
+        with self.assertRaises(Exception) as e:
+            transfer(50, 1, 2)
+        self.assertEqual(e.exception.args[0], 'Error transferring amount: No sender account found')
+        self.assertEqual(mock_cursor.close.called, True)
 
-        # Assert
-        mock_conn.execute.assert_called_once()
-        mock_conn.commit.assert_called_once()
-        mock_conn.close.assert_called_once()
-        print(f"Sender's new balance: {sender_balance}")
-        print(f"Receiver's new balance: {receiver_balance}")
+    @patch('your_module.engine.connect', autospec=True)
+    def test_transfer_no_receiver_account(self, mock_connect):
+        mock_cursor = Mock()
+        mock_cursor.execute.side_effect = Exception('No receiver account found')
+        mock_connect.return_value = mock_cursor
+        with self.assertRaises(Exception) as e:
+            transfer(50, 1, 2)
+        self.assertEqual(e.exception.args[0], 'Error transferring amount: No receiver account found')
+        self.assertEqual(mock_cursor.close.called, True)
 
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    def test_transfer_funds_negative_amount(self, mock_conn, mock_text, mock_engine):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
-        amount = -100
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_conn.close.return_value = None
-        mock_text.return_value = 'SELECT balance FROM accounts WHERE id = :sender'
-        mock_conn.execute SIDE_EFFECT use mock_conn.execute.return_value
+    @patch('your_module.engine.connect', autospec=True)
+    def test_transfer_insufficient_balance(self, mock_connect):
+        mock_cursor = Mock()
+        mock_cursor.execute.return_value = Mock()
+        mock_cursor.execute.return_value.scalar.return_value = 50  # Initial balance
 
-        # Act
-        transfer_funds(sender_id, receiver_id, amount)
+        mock_connect.return_value = mock_cursor
+        with self.assertRaises(Exception) as e:
+            transfer(100, 1, 2)
+        self.assertEqual(e.exception.args[0], 'Error transferring amount: Insufficient balance')
+        self.assertEqual(mock_cursor.close.called, True)
 
-        # Assert
-        mock_conn.execute.assert_called_once()
-        mock_conn.commit.assert_called_once()
-        mock_conn.close.assert_called_once()
-        print(f"Sender's new balance: {sender_balance}")
-        print(f"Receiver's new balance: {receiver_balance}")
-
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    def test_transfer_funds_zero_amount(self, mock_conn, mock_text, mock_engine):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
-        amount = 0
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_conn.close.return_value = None
-        mock_text.return_value = 'SELECT balance FROM accounts WHERE id = :sender'
-        mock_conn.execute SIDE_EFFECT use mock_conn.execute.return_value
-
-        # Act
-        transfer_funds(sender_id, receiver_id, amount)
-
-        # Assert
-        mock_conn.execute.assert_called_once()
-        mock_conn.commit.assert_called_once()
-        mock_conn.close.assert_called_once()
-        print(f"Sender's new balance: {sender_balance}")
-        print(f"Receiver's new balance: {receiver_balance}")
-
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    def test_transfer_funds_sender_id_not_found(self, mock_conn, mock_text, mock_engine):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
-        amount = 100
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_conn.close.return_value = None
-        mock_text.return_value = 'SELECT balance FROM accounts WHERE id = :sender'
-        mock_conn.execute SIDE_EFFECT use mock_conn.execute.return_value
-        mock_conn.execute SIDE_EFFECT use raise Exception('sender not found')
-
-        # Act and Assert
-        with self.assertRaises(Exception):
-            transfer_funds(sender_id, receiver_id, amount)
-            mock_conn.execute.assert_called_once()
-            mock_conn.commit.assert_called_once()
-            mock_conn.close.assert_called_once()
-            print(f"Sender's new balance: {sender_balance}")
-            print(f"Receiver's new balance: {receiver_balance}")
-
-    @patch('your_module.engine')
-    @patch('your_module.text')
-    @patch('your_module.conn')
-    def test_transfer_funds_receiver_id_not_found(self, mock_conn, mock_text, mock_engine):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
-        amount = 100
-        mock_conn.execute.return_value = None
-        mock_conn.commit.return_value = None
-        mock_conn.close.return_value = None
-        mock_text.return_value = 'SELECT balance FROM accounts WHERE id = :receiver'
-        mock_conn.execute SIDE_EFFECT use mock_conn.execute.return_value
-        mock_conn.execute SIDE_EFFECT use raise Exception('receiver not found')
-
-        # Act and Assert
-        with self.assertRaises(Exception):
-            transfer_funds(sender_id, receiver_id, amount)
-            mock_conn.execute.assert_called_once()
-            mock_conn.commit.assert_called_once()
-            mock_conn.close.assert_called_once()
-            print(f"Sender's new balance: {sender_balance}")
-            print(f"Receiver's new balance: {receiver_balance}")
+    @patch('your_module.engine.connect', autospec=True)
+    def test_transfer_invalid_input_types(self, mock_connect):
+        with self.assertRaises(TypeError) as e:
+            transfer('a', 1, 2)
+        self.assertEqual(e.exception.args[0], "'amount' must be an integer")
+        with self.assertRaises(TypeError) as e:
+            transfer(50, 'a', 2)
+        self.assertEqual(e.exception.args[0], "'sender' and 'receiver' must be integers")
+        with self.assertRaises(TypeError) as e:
+            transfer(50, 1, 'a')
+        self.assertEqual(e.exception.args[0], "'sender' and 'receiver' must be integers")
 
 if __name__ == '__main__':
     unittest.main()
