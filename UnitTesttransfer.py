@@ -1,101 +1,111 @@
 
 import unittest
-from unittest.mock import patch
-from your_module import transfer_amount
-import pandas as pd
-from config import engine
-import sqlalchemy
+from your_module import transfer  # Replace 'your_module' with the actual name of the module where the function is defined
 
-class TestTransferAmount(unittest.TestCase):
+class TestTransfer(unittest.TestCase):
 
-    @patch('sqlalchemy.text')
-    def test_transfer_amount_success(self, mock_sqlalchemy_text):
+    def test_transfer succeeds(self):
         # Arrange
-        sender_id = 1
-        receiver_id = 2
         amount = 100
-        accounts_df = pd.DataFrame({'id': [1, 2], 'balance': [100, 200]})
-        accounts_df.to_sql('accounts', engine, if_exists='replace', index=False)
+        sender = 1
+        receiver = 2
+        expected_balance_sender = 0
+        expected_balance_receiver = 100
 
         # Act
-        transfer_amount(sender_id, receiver_id, amount)
-        result = pd.read_sql_table('accounts', engine)
+        result = transfer(amount, sender, receiver)
 
         # Assert
-        self.assertEqual(result.loc[0, 'balance'], 0)
-        self.assertEqual(result.loc[1, 'balance'], 300)
-        self.assertTrue(mock_sqlalchemy_text.called)
+        self.assertEqual(result[0], expected_balance_sender)
+        self.assertEqual(result[1], expected_balance_receiver)
 
-    @patch('sqlalchemy.text')
-    def test_transfer_amount_invalid_sender(self, mock_sqlalchemy_text):
+    def test_transfer insufficient sender(self):
         # Arrange
-        sender_id = 3
-        receiver_id = 2
-        amount = 100
-        accounts_df = pd.DataFrame({'id': [1, 2], 'balance': [100, 200]})
-        accounts_df.to_sql('accounts', engine, if_exists='replace', index=False)
-
-        # Act
-        transfer_amount(sender_id, receiver_id, amount)
-
-        # Assert
-        result = pd.read_sql_table('accounts', engine)
-        self.assertEqual(result.loc[0, 'balance'], 100)
-        self.assertEqual(result.loc[1, 'balance'], 200)
-        self.assertTrue(mock_sqlalchemy_text.called)
-
-    @patch('sqlalchemy.text')
-    def test_transfer_amount_invalid_receiver(self, mock_sqlalchemy_text):
-        # Arrange
-        sender_id = 1
-        receiver_id = 3
-        amount = 100
-        accounts_df = pd.DataFrame({'id': [1, 2], 'balance': [100, 200]})
-        accounts_df.to_sql('accounts', engine, if_exists='replace', index=False)
-
-        # Act
-        transfer_amount(sender_id, receiver_id, amount)
-
-        # Assert
-        result = pd.read_sql_table('accounts', engine)
-        self.assertEqual(result.loc[0, 'balance'], 100)
-        self.assertEqual(result.loc[1, 'balance'], 200)
-        self.assertTrue(mock_sqlalchemy_text.called)
-
-    @patch('sqlalchemy.text')
-    def test_transfer_amount_insufficient_balance(self, mock_sqlalchemy_text):
-        # Arrange
-        sender_id = 1
-        receiver_id = 2
         amount = 1000
-        accounts_df = pd.DataFrame({'id': [1, 2], 'balance': [100, 200]})
-        accounts_df.to_sql('accounts', engine, if_exists='replace', index=False)
+        sender = 1
+        receiver = 2
+        expected_balance_sender = 0
+        expected_balance_receiver = 0
 
         # Act
-        transfer_amount(sender_id, receiver_id, amount)
+        result = transfer(amount, sender, receiver)
 
         # Assert
-        result = pd.read_sql_table('accounts', engine)
-        self.assertEqual(result.loc[0, 'balance'], 100)
-        self.assertEqual(result.loc[1, 'balance'], 200)
-        self.assertTrue(mock_sqlalchemy_text.called)
+        self.assertEqual(result[0], expected_balance_sender)
+        self.assertEqual(result[1], expected_balance_receiver)
 
-    def test_transfer_amount_engine_error(self):
+    def test_transfer no receiver (receiver does not exist in database) (this might not work in real life due to DB constraints):
         # Arrange
-        sender_id = 1
-        receiver_id = 2
         amount = 100
-        accounts_df = pd.DataFrame({'id': [1, 2], 'balance': [100, 200]})
-        accounts_df.to_sql('accounts', engine, if_exists='replace', index=False)
-        engine.execute = lambda query: None
+        sender = 1
+        receiver = 3  # receiver does not exist in db
+        expected_balance_sender = 0
+        expected_balance_receiver = 0
 
         # Act
-        transfer_amount(sender_id, receiver_id, amount)
+        result = transfer(amount, sender, receiver)
 
         # Assert
-        result = pd.read_sql_table('accounts', engine)
-        self.assertEqual(result.loc[0, 'balance'], 100)
-        self.assertEqual(result.loc[1, 'balance'], 200)
+        self.assertEqual(result[0], expected_balance_sender)
+        self.assertEqual(result[1], expected_balance_receiver)
+
+    def test_transfer receiver already has balance (receiver now has more than the sender) (this is not how a real bank works, but a test case):
+        # Arrange
+        amount = 1000
+        sender = 1
+        receiver = 2
+        initial_balance_receiver = 500  # receiver had 500 initially
+        expected_balance_sender = -1000  # sender loses 1000, receiver gains 900 (initial balance + 1000 - 100)
+        expected_balance_receiver = 1500  # receiver now has 1500
+
+        # Act
+        result = transfer(amount, sender, receiver)
+
+        # Assert
+        self.assertEqual(result[0], expected_balance_sender)
+        self.assertEqual(result[1], expected_balance_receiver)
+
+    def test_transfer zero amount (does not change anything):
+        # Arrange
+        amount = 0
+        sender = 1
+        receiver = 2
+        expected_balance_sender = 100
+        expected_balance_receiver = 200
+
+        # Act
+        result = transfer(amount, sender, receiver)
+
+        # Assert
+        self.assertEqual(result[0], expected_balance_sender)
+        self.assertEqual(result[1], expected_balance_receiver)
+
+    def test_transfer negative amount (will throw error):
+        with self.assertRaises(Exception):
+            # Arrange
+            amount = -100
+            sender = 1
+            receiver = 2
+            # Act
+            transfer(amount, sender, receiver)
+
+    def test_transfer sender and receiver ids are None (will throw error):
+        with self.assertRaises(Exception):
+            # Arrange
+            amount = 100
+            sender = None
+            receiver = None
+            # Act
+            transfer(amount, sender, receiver)
+
+    def test_transfer sender and receiver ids are not integers (will throw error):
+        with self.assertRaises(Exception):
+            # Arrange
+            amount = 100
+            sender = "John"
+            receiver = "Jane"
+            # Act
+            transfer(amount, sender, receiver)
 
 if __name__ == '__main__':
     unittest.main()

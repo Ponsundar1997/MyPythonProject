@@ -1,64 +1,48 @@
 
 import unittest
-from unittest.mock import patch, Mock
-from your_file import calculate_repayment_schedule  # replace 'your_file' with the actual name of your file
+import pandas as pd
+from unittest.mock import patch
+from your_module import calculate_repayment_schedule  # replace 'your_module' with the actual module name
 
 class TestCalculateRepaymentSchedule(unittest.TestCase):
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_valid_loan_id(self, mock_engine):
+        # Test valid loan ID
+        loan_id = 1
+        mock_engine.execute.return_value.fetchone.return_value = (10000, 5, 360, '2020-01-01')
+        result = calculate_repayment_schedule(loan_id)
+        self.assertIsInstance(result, pd.DataFrame)
 
-    @patch('your_file.engine')
-    def test_calculate_repayment_schedule(self, mock_engine):
-        # Test connection to database
-        mock_conn = mock_engine.connect.return_value
-        mock_conn.execute.return_value.fetchone.return_value = (100, 10, 5, '2022-01-01')  # replace with your expected values
-        loan_id = 1  # replace with your expected value
-        calculate_repayment_schedule(loan_id)
-        mock_engine.connect.assert_called_once()
-        mock_conn.execute.assert_called_once()
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_invalid_loan_id(self, mock_engine):
+        # Test invalid loan ID (returns None)
+        loan_id = 999
+        mock_engine.execute.return_value.fetchone.return_value = None
+        result = calculate_repayment_schedule(loan_id)
+        self.assertIsNone(result)
 
-    @patch('your_file.engine')
-    def test_calculate_repayment_schedule_nonexistent_loan(self, mock_engine):
-        # Test connection to database with non-existent loan
-        mock_conn = mock_engine.connect.return_value
-        mock_conn.execute.return_value.fetchone.return_value = None
-        loan_id = 1  # replace with your expected value
-        self.assertRaises(Exception, calculate_repayment_schedule, loan_id)
-        mock_engine.connect.assert_called_once()
-        mock_conn.execute.assert_called_once()
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_query_error(self, mock_engine):
+        # Test query execution error (returns None)
+        loan_id = 1
+        mock_engine.execute.return_value.fetchone.side_effect = Exception('Error')
+        result = calculate_repayment_schedule(loan_id)
+        self.assertIsNone(result)
 
-    @patch('your_file.engine')
-    def test_calculate_repayment_schedule_mismatched_date_format(self, mock_engine):
-        # Test connection to database with mismatched date format
-        mock_conn = mock_engine.connect.return_value
-        row = ('100', '10', '5', '01/01/2022')  # replace with your expected values
-        mock_conn.execute.return_value.fetchone.return_value = row
-        loan_id = 1  # replace with your expected value
-        self.assertRaises(ValueError, calculate_repayment_schedule, loan_id)
-        mock_engine.connect.assert_called_once()
-        mock_conn.execute.assert_called_once()
+    def test_calculate_repayment_schedule_output_format(self):
+        # Test output format (repayment schedule DataFrame)
+        loan_id = 1
+        result = calculate_repayment_schedule(loan_id)
+        self.assertIsInstance(result, pd.DataFrame)
+        self.assertEqual(len(result.columns), 8)
+        self.assertGreater(result.shape[0], 0)
 
-    @patch('your_file.engine')
-    def test_calculate_repayment_schedule_rounding_error(self, mock_engine):
-        # Test connection to database with rounding error
-        mock_conn = mock_engine.connect.return_value
-        row = ('100', '10', '5', '2022-01-01')  # replace with your expected values
-        mock_conn.execute.return_value.fetchone.return_value = row
-        loan_id = 1  # replace with your expected value
-        calculate_repayment_schedule(loan_id)
-        mock_engine.connect.assert_called_once()
-        mock_conn.execute.assert_called_once()
-
-    @patch('your_file.engine')
-    def test_calculate_repayment_schedule_several_calls(self, mock_engine):
-        # Test connection to database with multiple calls
-        mock_conn = mock_engine.connect.return_value
-        row = ('100', '10', '5', '2022-01-01')  # replace with your expected values
-        mock_conn.execute.return_value.fetchone.return_value = row
-        loan_id = 1  # replace with your expected value
-        calculate_repayment_schedule(loan_id)
-        calculate_repayment_schedule(loan_id)
-        calculate_repayment_schedule(loan_id)
-        mock_engine.connect.assert_any_call()
-        mock_conn.execute.assert_any_call()
+    def test_calculate_repayment_schedule_calculations(self):
+        # Test repayment schedule calculations (manually verify values)
+        loan_id = 1
+        result = calculate_repayment_schedule(loan_id)
+        self.assertAlmostEqual(result['totalpayment'].values[0], 173.62, places=2)
+        self.assertAlmostEqual(result['balance'].values[-1], 0, places=2)
 
 if __name__ == '__main__':
     unittest.main()

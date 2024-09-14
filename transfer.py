@@ -1,27 +1,33 @@
 
-from config import engine
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 import pandas as pd
 
-def transfer_amount(sender_id, receiver_id, amount):
-    # Subtract amount from sender's account
-    update_sender = text("""
-        update accounts 
-        set balance = balance - :amount 
-        where id = :sender_id
-    """)
-    engine.execute(update_sender, sender_id=sender_id, amount=amount)
+# Load the database connection configuration from config.py
+from config import engine
 
-    # Add amount to receiver's account
-    update_receiver = text("""
-        update accounts 
-        set balance = balance + :amount 
-        where id = :receiver_id
-    """)
-    engine.execute(update_receiver, receiver_id=receiver_id, amount=amount)
+def transfer(amount, sender, receiver):
+    try:
+        # Subtract the amount from the sender's account
+        update_sender = text("UPDATE accounts SET balance = balance - :amount WHERE id = :sender")
+        engine.execute(update_sender, {"amount": amount, "sender": sender})
 
-    # Commit changes
-    engine.commit()
+        # Add the amount to the receiver's account
+        update_receiver = text("UPDATE accounts SET balance = balance + :amount WHERE id = :receiver")
+        engine.execute(update_receiver, {"amount": amount, "receiver": receiver})
 
-accounts_df = pd.read_sql_table('accounts', engine)
-# Perform additional operations on the DataFrame
+        # Commit the changes
+        engine.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        engine.rollback()
+
+    # Return the final result
+    conn = engine.connect()
+    get_balance_sender = text("SELECT balance FROM accounts WHERE id = :sender")
+    result_sender = conn.execute(get_balance_sender, {"sender": sender}).fetchone()
+    
+    get_balance_receiver = text("SELECT balance FROM accounts WHERE id = :receiver")
+    result_receiver = conn.execute(get_balance_receiver, {"receiver": receiver}).fetchone()
+
+    return result_sender[0], result_receiver[0]
