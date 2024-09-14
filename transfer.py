@@ -1,24 +1,17 @@
 
-from sqlalchemy import create_engine, text
 from config import engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
 import pandas as pd
 
-def your_function(param1, param2):
-    conn = engine.connect()
-    result = conn.execute(text("""
-        BEGIN;
-        -- some DDL commands here
-        CREATE TEMP TABLE temp_table AS
-        SELECT * FROM your_table WHERE your_column = :param1;
-        CREATE INDEX idx_temp_table ON temp_table(your_index_column);
-        COMMIT;
-    """), {'param1': param1})
+def transfer_funds(sender: int, receiver: int, amount: float) -> None:
+    engine.execute(text("begin"))
     
-    result = conn.execute(text("""
-        SELECT * FROM temp_table
-        WHERE another_column = :param2
-        ORDER BY some_column;
-    """), {'param2': param2})
+    with engine.connect() as connection:
+        connection.execute(text("update accounts set balance = balance - :amount where id = :sender").bindparams(sender=sender, amount=amount))
+        connection.execute(text("update accounts set balance = balance + :amount where id = :receiver").bindparams(receiver=receiver, amount=amount))
     
-    df = pd.DataFrame(result.fetchall(), columns=[x.key for x in result.keys()])
-    return df
+    engine.execute(text("commit"))
+
+# Usage:
+transfer_funds(1, 2, 100.0)

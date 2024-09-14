@@ -1,47 +1,37 @@
-
+Python
 import unittest
-from unittest.mock import patch, Mock
-from your_module import your_function  # replace 'your_module' with the actual name of your module
-import pandas as pd
-from pandas.testing import assert_frame_equal
+from unittest.mock import patch
+from your_module import transfer_funds
 
-class TestYourFunction(unittest.TestCase):
+class TestTransferFunds(unittest.TestCase):
 
     @patch('your_module.engine')
-    def test_success(self, engine_mock):
-        engine_mock.connect.return_value = Mock()
-        engine_mock.connect().execute.return_value = Mock()
-        engine_mock.connect().execute.return_value.keys.return_value = [Mock(key='column1'), Mock(key='column2')]
-        engine_mock.connect().execute.return_value.fetchall.return_value = [(1, 2)]
-        engine_mock.connect().execute.return_value.fetchall.return_value = [(3, 4)]
-        result = your_function('param1', 'param2')
-        self.assertIsInstance(result, pd.DataFrame)
-        assert_frame_equal(result, pd.DataFrame({'column1': [1], 'column2': [2]}))
+    def test_transfer_funds(self, engine_mock):
+        transfer_funds(1, 2, 100.0)
+
+        engine_mock.execute.assert_called_with(text("begin"))
+        engine_mock.connect.assert_called_once()
+        connection_mock = engine_mock.connect.return_value.__enter__.return_value
+        connection_mock.execute.assert_any_call(text("update accounts set balance = balance - :amount where id = :sender").bindparams(sender=1, amount=100.0))
+        connection_mock.execute.assert_any_call(text("update accounts set balance = balance + :amount where id = :receiver").bindparams(receiver=2, amount=100.0))
+        engine_mock.execute.assert_called_with(text("commit"))
 
     @patch('your_module.engine')
-    def test_failure_on_executing_ddl(self, engine_mock):
-        engine_mock.connect.return_value = Mock()
-        engine_mock.connect().execute.side_effect = Exception('DDL command failed')
+    def test_transfer_funds_error(self, engine_mock):
         with self.assertRaises(Exception):
-            your_function('param1', 'param2')
+            transfer_funds(1, 1, 100.0)
 
     @patch('your_module.engine')
-    def test_failure_on Executing_query(self, engine_mock):
-        engine_mock.connect.return_value = Mock()
-        engine_mock.connect().execute.return_value = Mock()
-        engine_mock.connect().execute.return_value.keys.return_value = Mock()
-        engine_mock.connect().execute.return_value.fetchall.side_effect = Exception('Query failed')
+    def test_transfer_funds_sender_not_found(self, engine_mock):
+        engine_mock.connect.return_value.execute.side_effect = Exception("Error message")
         with self.assertRaises(Exception):
-            your_function('param1', 'param2')
+            transfer_funds(1, 2, 100.0)
 
     @patch('your_module.engine')
-    def test_failure_on_result_fetchall(self, engine_mock):
-        engine_mock.connect.return_value = Mock()
-        engine_mock.connect().execute.return_value = Mock()
-        engine_mock.connect().execute.return_value.keys.return_value = Mock()
-        engine_mock.connect().execute.return_value.fetchall.side_effect = Exception('Failed to fetch all')
+    def test_transfer_funds_receiver_not_found(self, engine_mock):
+        engine_mock.connect.return_value.execute.side_effect = Exception("Error message")
         with self.assertRaises(Exception):
-            your_function('param1', 'param2')
+            transfer_funds(1, 2, 100.0)
 
 if __name__ == '__main__':
     unittest.main()

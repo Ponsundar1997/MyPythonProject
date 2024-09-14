@@ -1,39 +1,52 @@
 
 import unittest
-from datetime import datetime
-from my_module import my_function  # Assuming the function is in my_module.py
+import pandas as pd
+from your_module import calculate_repayment_schedule
 
-class TestMyFunction(unittest.TestCase):
+class TestCalculateRepaymentSchedule(unittest.TestCase):
+    def setUp(self):
+        self.session = sessionmaker(bind=engine)()
+        self.loan_details = {"loanamount": 10000, "interestrate": 6, "loanterm": 36, "startdate": "2022-01-01"}
+        self.loan_id = 123
+        self.engine = engine 
 
-    def test_my_function正常使用(self):
-        date_start = datetime(2021, 1, 1)
-        date_end = datetime(2021, 12, 31)
-        result = my_function(date_start, date_end)
+    def test_calculate_repayment_schedule(self):
+        # Test with valid loan details
+        result = calculate_repayment_schedule(self.loan_id)
         self.assertIsInstance(result, pd.DataFrame)
+        self.assertEqual(result.shape[0], 36)
 
-    def test_my_function_date_start_larger_than_date_end(self):
-        date_start = datetime(2021, 12, 31)
-        date_end = datetime(2021, 1, 1)
-        with self.assertRaises(ValueError):
-            my_function(date_start, date_end)
-
-    def test_my_function_date_start_invalid(self):
-        date_start = '2021-01-01'
-        date_end = datetime(2021, 12, 31)
-        with self.assertRaises(TypeError):
-            my_function(date_start, date_end)
-
-    def test_my_function_date_end_invalid(self):
-        date_start = datetime(2021, 1, 1)
-        date_end = '2021-12-31'
-        with self.assertRaises(TypeError):
-            my_function(date_start, date_end)
-
-    def test_my_function_no_data_found(self):
-        date_start = datetime(2020, 1, 1)
-        date_end = datetime(2020, 1, 1)
-        result = my_function(date_start, date_end)
+        # Test with loanid not in the database
+        result = calculate_repayment_schedule(999)
         self.assertIsNone(result)
+
+        # Test with missing values in loan details
+        missing_values_loan_details = {"loanamount": None, "interestrate": 6, "loanterm": 36, "startdate": "2022-01-01"}
+        result = calculate_repayment_schedule(self.loan_id)
+        self.assertIsNone(result)
+
+        # Test with invalid interest rate
+        invalid_interest_rate = {"loanamount": 10000, "interestrate": -1, "loanterm": 36, "startdate": "2022-01-01"}
+        result = calculate_repayment_schedule(self.loan_id)
+        self.assertIsNone(result)
+
+        # Test with loan term less than 1
+        invalid_loan_term = {"loanamount": 10000, "interestrate": 6, "loanterm": 0, "startdate": "2022-01-01"}
+        result = calculate_repayment_schedule(self.loan_id)
+        self.assertIsNone(result)
+
+        # Test with start date in the future
+        invalid_start_date = {"loanamount": 10000, "interestrate": 6, "loanterm": 36, "startdate": "2050-01-01"}
+        result = calculate_repayment_schedule(self.loan_id)
+        self.assertIsNone(result)
+
+        # Test with start date less than today
+        invalid_start_date = {"loanamount": 10000, "interestrate": 6, "loanterm": 36, "startdate": "2021-01-01"}
+        result = calculate_repayment_schedule(self.loan_id)
+        self.assertIsNone(result)
+
+    def tearDown(self):
+        self.session.close()
 
 if __name__ == '__main__':
     unittest.main()
