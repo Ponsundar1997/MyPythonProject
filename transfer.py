@@ -1,17 +1,26 @@
 
-from config import engine
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection
+import sqlalchemy as sa
+from sqlalchemy import text
 import pandas as pd
+from config import engine
 
-def transfer_funds(sender: int, receiver: int, amount: float) -> None:
-    engine.execute(text("begin"))
-    
-    with engine.connect() as connection:
-        connection.execute(text("update accounts set balance = balance - :amount where id = :sender").bindparams(sender=sender, amount=amount))
-        connection.execute(text("update accounts set balance = balance + :amount where id = :receiver").bindparams(receiver=receiver, amount=amount))
-    
-    engine.execute(text("commit"))
+def transfer_funds(sender, receiver, amount):
+    # Create a connection to the database
+    conn = engine.connect()
 
-# Usage:
-transfer_funds(1, 2, 100.0)
+    # Subtract the amount from the sender's account
+    sender_update = text("""update accounts 
+                            set balance = balance - :amount 
+                            where id = :sender""")
+    conn.execute(sender_update, {"sender": sender, "amount": amount})
+
+    # Add the amount to the receiver's account
+    receiver_update = text("""update accounts 
+                             set balance = balance + :amount 
+                             where id = :receiver""")
+    conn.execute(receiver_update, {"receiver": receiver, "amount": amount})
+
+    # Commit the changes
+    conn.commit()
+
+    conn.close()
