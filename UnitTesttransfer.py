@@ -1,52 +1,48 @@
 
 import unittest
-from unittest.mock import patch, Mock
-from my_test_file import *  # Replace with the actual file name
+from transfer_between_accounts import transfer_between_accounts
 
-class TestTransaction(unittest.TestCase):
+class TestTransferBetweenAccounts(unittest.TestCase):
 
-    @patch('config.engine.url')
-    @patch('sqlalchemy.create_engine')
-    @patch('pandas as pd')
-    def setUp(self, pd_mock, engine_mock, url_mock):
-        self.engine = engine_mock
-        self.url = url_mock
-        self.sender = 1
-        self.receiver = 2
-        self.amount = 100
+    def setUp(self):
+        engine.execute("TRUNCATE TABLE accounts")
+        engine.execute(text("INSERT INTO accounts (id, balance) VALUES (1, 100), (2, 200)"))
 
-    def test_update_sender(self, pd_mock, engine_mock, url_mock):
-        update_sender_sql = """
-        update accounts 
-        set balance = balance - :amount 
-        where id = :sender;
-        """
-        result_sender = engine_mock.execute(text(update_sender_sql), sender=self.sender, amount=self.amount)
-        self.assertEqual(result_sender, 'Update successful')
+    def testTransferPositiveAmount(self):
+        transfer_between_accounts(1, 2, 20)
+        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
+        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
+        self.assertEqual(sender, 80)
+        self.assertEqual(receiver, 220)
 
-    def test_update_receiver(self, pd_mock, engine_mock, url_mock):
-        update_receiver_sql = """
-        update accounts 
-        set balance = balance + :amount 
-        where id = :receiver;
-        """
-        result_receiver = engine_mock.execute(text(update_receiver_sql), receiver=self.receiver, amount=self.amount)
-        self.assertEqual(result_receiver, 'Update successful')
+    def testTransferNegativeAmount(self):
+        transfer_between_accounts(1, 2, -20)
+        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
+        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
+        self.assertEqual(sender, 120)
+        self.assertEqual(receiver, 220)
 
-    def test_commit_changes(self, pd_mock, engine_mock, url_mock):
-        conn = engine_mock
-        result_commit = conn.execute("COMMIT;")
-        self.assertEqual(result_commit, 'Commit successful')
+    def testTransferZeroAmount(self):
+        transfer_between_accounts(1, 2, 0)
+        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
+        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
+        self.assertEqual(sender, 100)
+        self.assertEqual(receiver, 200)
 
-    def test_drivername_postgresql(self, pd_mock, engine_mock, url_mock):
-        url_mock.drivername = 'postgresql'
-        conn = create_engine('postgresql://' + url_mock.username + ':' + url_mock.password + '@' + url_mock.host + ':' + str(url_mock.port) + '/' + url_mock.database)
-        self.assertEqual(conn, engine_mock)
+    def testTransferSameAccount(self):
+        with self.assertRaises(ValueError):
+            transfer_between_accounts(1, 1, 20)
 
-    def test_drivername_not_postgresql(self, pd_mock, engine_mock, url_mock):
-        url_mock.drivername = 'not_postgresql'
-        conn = create_engine('postgresql://' + url_mock.username + ':' + url_mock.password + '@' + url_mock.host + ':' + str(url_mock.port) + '/' + url_mock.database)
-        self.assertEqual(conn, engine_mock)
+    def testTransferInvalidSenderId(self):
+        with self.assertRaises(ValueError):
+            transfer_between_accounts(3, 2, 20)
+
+    def testTransferInvalidReceiverId(self):
+        with self.assertRaises(ValueError):
+            transfer_between_accounts(1, 3, 20)
+
+    def tearDown(self):
+        engine.execute("TRUNCATE TABLE accounts")
 
 if __name__ == '__main__':
     unittest.main()
