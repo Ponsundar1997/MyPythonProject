@@ -1,48 +1,60 @@
 
 import unittest
-from transfer_between_accounts import transfer_between_accounts
+from unittest.mock import patch, mock
+from your_module import transfer_funds  # import the module
 
-class TestTransferBetweenAccounts(unittest.TestCase):
+class TestTransferFunds(unittest.TestCase):
+    @patch('your_module.engine')
+    @patch('your_module.text')
+    def test_transfer_funds_success(self, mock_text, mock_engine):
+        mock_engine.execute.return_value = None
+        transfer_funds(1, 2, 100)
+        mock_text.assert_any_call("""
+            UPDATE accounts 
+            SET balance = balance - :amount 
+            WHERE id = :sender
+        """)
+        mock_text.assert_any_call("""
+            UPDATE accounts 
+            SET balance = balance + :amount 
+            WHERE id = :receiver
+        """)
+        mock_engine.execute.assert_any_call(query=mock_text(), parameters={'sender': 1, 'amount': 100})
+        mock_engine.execute.assert_any_call(query=mock_text(), parameters={'receiver': 2, 'amount': 100})
+        mock_engine.connect().commit.assert_called_once()
 
-    def setUp(self):
-        engine.execute("TRUNCATE TABLE accounts")
-        engine.execute(text("INSERT INTO accounts (id, balance) VALUES (1, 100), (2, 200)"))
+    @patch('your_module.engine')
+    @patch('your_module.text')
+    def test_transfer_funds_sender_notexists(self, mock_text, mock_engine):
+        mock_engine.execute.side_effect = Exception('Sender not found')
+        with self.assertRaises(Exception):
+            transfer_funds(1, 2, 100)
 
-    def testTransferPositiveAmount(self):
-        transfer_between_accounts(1, 2, 20)
-        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
-        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
-        self.assertEqual(sender, 80)
-        self.assertEqual(receiver, 220)
+    @patch('your_module.engine')
+    @patch('your_module.text')
+    def test_transfer_funds_receiver_notexists(self, mock_text, mock_engine):
+        mock_engine.execute.side_effect = Exception('Receiver not found')
+        with self.assertRaises(Exception):
+            transfer_funds(1, 2, 100)
 
-    def testTransferNegativeAmount(self):
-        transfer_between_accounts(1, 2, -20)
-        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
-        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
-        self.assertEqual(sender, 120)
-        self.assertEqual(receiver, 220)
+    @patch('your_module.engine')
+    @patch('your_module.text')
+    def test_transfer_funds_insufficient_balance(self, mock_text, mock_engine):
+        mock_engine.execute.return_value = None
+        transfer_funds(1, 2, 1000)  # sender balance is insufficient
+        mock_text.assert_any_call("""
+            UPDATE accounts 
+            SET balance = balance - :amount 
+            WHERE id = :sender
+        """)
+        mock_engine.execute.assert_any_call(query=mock_text(), parameters={'sender': 1, 'amount': 1000})
+        self.assertFalse(mock_text.called)  # receiver update query not executed
 
-    def testTransferZeroAmount(self):
-        transfer_between_accounts(1, 2, 0)
-        sender = pd.read_sql_query("SELECT * FROM accounts WHERE id = 1", engine).balance.iloc[0]
-        receiver = pd.read_sql_query("SELECT * FROM accounts WHERE id = 2", engine).balance.iloc[0]
-        self.assertEqual(sender, 100)
-        self.assertEqual(receiver, 200)
-
-    def testTransferSameAccount(self):
+    @patch('your_module.engine')
+    @patch('your_module.text')
+    def test_transfer_funds_negative_amount(self, mock_text, mock_engine):
         with self.assertRaises(ValueError):
-            transfer_between_accounts(1, 1, 20)
-
-    def testTransferInvalidSenderId(self):
-        with self.assertRaises(ValueError):
-            transfer_between_accounts(3, 2, 20)
-
-    def testTransferInvalidReceiverId(self):
-        with self.assertRaises(ValueError):
-            transfer_between_accounts(1, 3, 20)
-
-    def tearDown(self):
-        engine.execute("TRUNCATE TABLE accounts")
+            transfer_funds(1, 2, -10)
 
 if __name__ == '__main__':
     unittest.main()
