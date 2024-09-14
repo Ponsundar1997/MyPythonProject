@@ -1,26 +1,34 @@
-
-import sqlalchemy as sa
-from sqlalchemy import text
-import pandas as pd
+Python
 from config import engine
+from sqlalchemy import create_engine, text
+import pandas as pd
 
-def transfer_funds(sender, receiver, amount):
-    # Create a connection to the database
-    conn = engine.connect()
+# create a connection
+if engine.url.drivername == 'postgresql':
+    conn = create_engine('postgresql://' + engine.url.username + ':' + engine.url.password + '@' + engine.url.host + ':' + str(engine.url.port) + '/' + engine.url.database)
+else:
+    conn = engine
 
-    # Subtract the amount from the sender's account
-    sender_update = text("""update accounts 
-                            set balance = balance - :amount 
-                            where id = :sender""")
-    conn.execute(sender_update, {"sender": sender, "amount": amount})
+# sender and receiver IDs
+sender = 1
+receiver = 2
+amount = 100
 
-    # Add the amount to the receiver's account
-    receiver_update = text("""update accounts 
-                             set balance = balance + :amount 
-                             where id = :receiver""")
-    conn.execute(receiver_update, {"receiver": receiver, "amount": amount})
+# subtracting the amount from the sender's account 
+update_sender_sql = """
+update accounts 
+set balance = balance - :amount 
+where id = :sender;
+"""
+result_sender = conn.execute(text(update_sender_sql), sender=sender, amount=amount)
 
-    # Commit the changes
-    conn.commit()
+# adding the amount to the receiver's account
+update_receiver_sql = """
+update accounts 
+set balance = balance + :amount 
+where id = :receiver;
+"""
+result_receiver = conn.execute(text(update_receiver_sql), receiver=receiver, amount=amount)
 
-    conn.close()
+# commit the changes
+conn.execute("COMMIT;")

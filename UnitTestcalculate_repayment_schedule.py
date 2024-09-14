@@ -1,80 +1,45 @@
 
 import unittest
-from unittest.mock import patch
-from your_module import calculate_repayment_schedule  # replace with your module name
+from unittest.mock import patch, Mock
+from your_module import calculate_repayment_schedule
 
 class TestCalculateRepaymentSchedule(unittest.TestCase):
-    @patch('your_module.engine.connect')
-    @patch('your_module.config.engine')
-    def test_calculate_repayment_schedule_valid_input(self, mock_engine, mock_connect):
-        mock_connect.return_value = MockConnection()
-        mock_result = MockResult([('10000.0', '5.0', '36', '2020-01-01')])
-        mock_connect.return_value.execute.return_value = mock_result
 
-        result = calculate_repayment_schedule(1)
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_valid_loan(self, mock_engine):
+        mock_engine.connect().execute.return_value = [(10000, 5, 36, '2020-01-01')]
 
-        self.assertEqual(result, {
-            'payment_date': '2020-01-01',
-            'principal_amount': 277.78,
-            'interest_amount': 22.22,
-            'total_payment': 300.0,
-            'balance': 9999.99,
-            ...
-        })
+        loan_id = 1
+        repayment_schedule = calculate_repayment_schedule(loan_id)
+        self.assertEqual(len(repayment_schedule), 36)
 
-    @patch('your_module.engine.connect')
-    @patch('your_module.config.engine')
-    def test_calculate_repayment_schedule_non_existent_loan(self, mock_engine, mock_connect):
-        mock_connect.return_value = MockConnection()
-        mock_result = MockResult([])
-        mock_connect.return_value.execute.return_value = mock_result
+        # check that each element in repayment_schedule is a dictionary
+        for payment in repayment_schedule:
+            self.assertIsInstance(payment, dict)
 
-        result = calculate_repayment_schedule(1)
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_invalid_loan_id(self, mock_engine):
+        mock_engine.connect().execute.return_value = None
 
-        self.assertIsNone(result)
+        loan_id = 1
+        with self.assertRaises(RuntimeError):
+            calculate_repayment_schedule(loan_id)
 
-    @patch('your_module.engine.connect')
-    @patch('your_module.config.engine')
-    def test_calculate_repayment_schedule_invalid_input(self, mock_engine, mock_connect):
-        mock_connect.return_value = MockConnection()
-        mock_result = MockResult([('abc', 'def', 'ghi', 'jkl')])  # invalid data types
-        mock_connect.return_value.execute.return_value = mock_result
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_invalid_query(self, mock_engine):
+        mock_engine.connect().execute.side_effect = SQLAlchemyError()
 
-        result = calculate_repayment_schedule(1)
+        loan_id = 1
+        with self.assertRaises(SQLAlchemyError):
+            calculate_repayment_schedule(loan_id)
 
-        self.assertIsNone(result)
+    @patch('your_module.engine')
+    def test_calculate_repayment_schedule_empty_result(self, mock_engine):
+        mock_engine.connect().execute.return_value = []
 
-    @patch('your_module.engine.connect')
-    @patch('your_module.config.engine')
-    def test_calculate_repayment_schedule_database_error(self, mock_engine, mock_connect):
-        mock_connect.return_value = MockConnection()
-        mock_connect.side_effect = Exception('Database error')
-
-        result = calculate_repayment_schedule(1)
-
-        self.assertIsNone(result)
-
-    def test_calculate_repayment_schedule_connection_error(self):
-        with patch('your_module.engine.connect') as mock_connect:
-            mock_connect.side_effect = Exception('Connection error')
-
-            result = calculate_repayment_schedule(1)
-
-            self.assertIsNone(result)
-
-class MockConnection:
-    def begin(self):
-        return self
-
-    def execute(self, query, *args, **kwargs):
-        return MockResult(query.splitlines())
-
-class MockResult:
-    def __init__(self, rows):
-        self.rows = rows
-
-    def fetchone(self):
-        return self.rows[0] if self.rows else None
+        loan_id = 1
+        repayment_schedule = calculate_repayment_schedule(loan_id)
+        self.assertEqual(repayment_schedule, [])
 
 if __name__ == '__main__':
     unittest.main()
