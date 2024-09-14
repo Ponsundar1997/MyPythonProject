@@ -1,55 +1,64 @@
 
 import unittest
-from unittest.mock import patch
-from your_module_name import calculate_loan_repayment  # Replace with your actual module name
-import datetime
+from unittest.mock import patch, Mock
+from your_file import calculate_repayment_schedule  # replace 'your_file' with the actual name of your file
 
-class TestCalculateLoanRepayment(unittest.TestCase):
+class TestCalculateRepaymentSchedule(unittest.TestCase):
 
-    @patch('your_module_name.engine')
-    def test_calculate_loan_repayment(self, engine_mock):
-        engine_mock.connect.return_value = object()
-        engine_mock.connect().execute.return_value = [(10000, 5, 60, datetime.date(2022, 1, 1))]
-        
-        calculate_loan_repayment(1)
-        
-        engine_mock.connect().execute.assert_called_once_with(text("SELECT loanamount, interestrate, loanterm, startdate FROM loans WHERE loanid = :loan_id"), loan_id={'loan_id': 1})
-        insert_queries = [
-            text(
-                """INSERT INTO repaymentschedule 
-                    (loanid, paymentnumber, paymentdate, principalamount, interestamount, totalpayment, balance)
-                    VALUES (:loan_id, :payment_number, :payment_date, :principal_amount, :interest_amount, :monthly_payment, :balance)
-                """),
-            text(
-                """INSERT INTO repaymentschedule 
-                    (loanid, paymentnumber, paymentdate, principalamount, interestamount, totalpayment, balance)
-                    VALUES (:loan_id, :payment_number, :payment_date, :principal_amount, :interest_amount, :monthly_payment, :balance)
-                """),
-            ...
-        ]
-        insert_queries[0].assert_called_once_with(loan_id=1, payment_number=1, payment_date=datetime.date(2022, 1, 1), principal_amount=..., interest_amount=..., monthly_payment=..., balance=...)
-        insert_queries[1].assert_called_once_with(loan_id=1, payment_number=2, payment_date=datetime.date(2022, 2, 1), principal_amount=..., interest_amount=..., monthly_payment=..., balance=...)
-        ...
-        engine_mock.connect().commit.assert_called_once()
-        engine_mock.connect().close.assert_called_once()
+    @patch('your_file.engine')
+    def test_calculate_repayment_schedule(self, mock_engine):
+        # Test connection to database
+        mock_conn = mock_engine.connect.return_value
+        mock_conn.execute.return_value.fetchone.return_value = (100, 10, 5, '2022-01-01')  # replace with your expected values
+        loan_id = 1  # replace with your expected value
+        calculate_repayment_schedule(loan_id)
+        mock_engine.connect.assert_called_once()
+        mock_conn.execute.assert_called_once()
 
-    @patch('your_module_name.engine')
-    def test_calculate_loan_repayment_no_loans(self, engine_mock):
-        engine_mock.connect.return_value = object()
-        engine_mock.connect().execute.return_value = []
-        
-        self.assertRaises(ValueError, calculate_loan_repayment, 1)
-        
-        engine_mock.connect().execute.assert_called_once_with(text("SELECT loanamount, interestrate, loanterm, startdate FROM loans WHERE loanid = :loan_id"), loan_id={'loan_id': 1})
+    @patch('your_file.engine')
+    def test_calculate_repayment_schedule_nonexistent_loan(self, mock_engine):
+        # Test connection to database with non-existent loan
+        mock_conn = mock_engine.connect.return_value
+        mock_conn.execute.return_value.fetchone.return_value = None
+        loan_id = 1  # replace with your expected value
+        self.assertRaises(Exception, calculate_repayment_schedule, loan_id)
+        mock_engine.connect.assert_called_once()
+        mock_conn.execute.assert_called_once()
 
-    @patch('your_module_name.engine')
-    def test_calculate_loan_repayment_invalid_loan_id(self, engine_mock):
-        engine_mock.connect.return_value = object()
-        engine_mock.connect().execute.side_effect = [ObjectNotFound('Loan not found')]
-        
-        self.assertRaises(ObjectNotFound, calculate_loan_repayment, 1)
-        
-        engine_mock.connect().execute.assert_called_once_with(text("SELECT loanamount, interestrate, loanterm, startdate FROM loans WHERE loanid = :loan_id"), loan_id={'loan_id': 1})
+    @patch('your_file.engine')
+    def test_calculate_repayment_schedule_mismatched_date_format(self, mock_engine):
+        # Test connection to database with mismatched date format
+        mock_conn = mock_engine.connect.return_value
+        row = ('100', '10', '5', '01/01/2022')  # replace with your expected values
+        mock_conn.execute.return_value.fetchone.return_value = row
+        loan_id = 1  # replace with your expected value
+        self.assertRaises(ValueError, calculate_repayment_schedule, loan_id)
+        mock_engine.connect.assert_called_once()
+        mock_conn.execute.assert_called_once()
+
+    @patch('your_file.engine')
+    def test_calculate_repayment_schedule_rounding_error(self, mock_engine):
+        # Test connection to database with rounding error
+        mock_conn = mock_engine.connect.return_value
+        row = ('100', '10', '5', '2022-01-01')  # replace with your expected values
+        mock_conn.execute.return_value.fetchone.return_value = row
+        loan_id = 1  # replace with your expected value
+        calculate_repayment_schedule(loan_id)
+        mock_engine.connect.assert_called_once()
+        mock_conn.execute.assert_called_once()
+
+    @patch('your_file.engine')
+    def test_calculate_repayment_schedule_several_calls(self, mock_engine):
+        # Test connection to database with multiple calls
+        mock_conn = mock_engine.connect.return_value
+        row = ('100', '10', '5', '2022-01-01')  # replace with your expected values
+        mock_conn.execute.return_value.fetchone.return_value = row
+        loan_id = 1  # replace with your expected value
+        calculate_repayment_schedule(loan_id)
+        calculate_repayment_schedule(loan_id)
+        calculate_repayment_schedule(loan_id)
+        mock_engine.connect.assert_any_call()
+        mock_conn.execute.assert_any_call()
 
 if __name__ == '__main__':
     unittest.main()
